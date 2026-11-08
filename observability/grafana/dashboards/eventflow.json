@@ -1,0 +1,106 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum(rate(eventflow_events_published_total[5m])) by (transport, outcome)",
+          "legendFormat": "{{transport}} {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Outbox → broker (publish rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(rate(eventflow_events_processed_total[5m])) by (transport, consumer, outcome)",
+          "legendFormat": "{{consumer}} {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Consumer processing rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum(rate(eventflow_events_failed_total[5m])) by (transport, stage)",
+          "legendFormat": "{{transport}} {{stage}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Failures (publish/consume)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum(rate(eventflow_retries_total[5m])) by (transport, stage)",
+          "legendFormat": "{{transport}} {{stage}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Retries",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum(rate(eventflow_dlq_messages_total[5m])) by (transport, consumer)",
+          "legendFormat": "{{transport}} {{consumer}}",
+          "refId": "A"
+        }
+      ],
+      "title": "DLQ / DLT",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(eventflow_processing_duration_seconds_bucket[5m])) by (le, consumer))",
+          "legendFormat": "p95 {{consumer}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Handler duration p95",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["eventflow"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "EventFlow Overview",
+  "uid": "eventflow-overview",
+  "version": 1
+}
