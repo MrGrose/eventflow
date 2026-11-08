@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --all-extras
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q tests/unit
+
+  integration-rabbit:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: eventflow
+          POSTGRES_PASSWORD: eventflow
+          POSTGRES_DB: eventflow
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U eventflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        ports:
+          - 5672:5672
+    env:
+      DATABASE_URL: postgresql+asyncpg://eventflow:eventflow@localhost:5435/eventflow
+      MESSAGING_TRANSPORT: rabbitmq
+      RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --all-extras
+      - run: uv run alembic upgrade head
+      - run: uv run pytest -q tests/unit tests/rabbitmq tests/integration tests/failure -m "not kafka"
+
+  integration-kafka:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: eventflow
+          POSTGRES_PASSWORD: eventflow
+          POSTGRES_DB: eventflow
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U eventflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --all-extras
+      - run: docker compose up -d kafka
+      - run: sleep 25
+      - run: uv run alembic upgrade head
+      - run: uv run pytest -q tests/kafka -m kafka
