@@ -54,3 +54,6 @@ markers = [
   "lab: comparative lab E1-E9",
 ]
 testpaths = ["tests"]
+
+[tool.uv]
+required-version = "==0.13.7"
