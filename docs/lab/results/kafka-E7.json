@@ -1,0 +1,20 @@
+{
+  "experiment_id": "E7",
+  "transport": "kafka",
+  "goal": "Kafka replay (earliest read)",
+  "initial_conditions": {
+    "seeded_messages": 3
+  },
+  "configuration": {
+    "auto_offset_reset": "earliest",
+    "group_id": null
+  },
+  "baseline": {},
+  "failure_injection": {},
+  "metrics": {
+    "messages_read": 3,
+    "read_elapsed_sec": 0.0015770830068504438
+  },
+  "conclusions": "Standalone consumer \u0447\u0438\u0442\u0430\u0435\u0442 \u0441 earliest \u0431\u0435\u0437 committed group.",
+  "limitations": "\u041d\u0435 consumer group lag."
+}

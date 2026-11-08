@@ -1,0 +1,19 @@
+{
+  "experiment_id": "E9",
+  "transport": "kafka",
+  "goal": "Burst publish",
+  "initial_conditions": {
+    "messages": 30
+  },
+  "configuration": {
+    "batch_tick_loop": true
+  },
+  "baseline": {},
+  "failure_injection": {},
+  "metrics": {
+    "elapsed_sec": 0.03577316700830124,
+    "throughput_msg_per_sec": 838.6173914386286
+  },
+  "conclusions": "Throughput ~838.6 msg/s (outbox tick path).",
+  "limitations": "\u0411\u0435\u0437 \u043f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0445 consumers."
+}

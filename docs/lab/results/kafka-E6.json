@@ -1,0 +1,22 @@
+{
+  "experiment_id": "E6",
+  "transport": "kafka",
+  "goal": "\u041f\u043e\u0440\u044f\u0434\u043e\u043a: \u043e\u0434\u0438\u043d partition \u043d\u0430 aggregate key",
+  "initial_conditions": {
+    "same_aggregate_id": "5ff56dd2-0ba5-4a29-b03d-5370dadda2b7",
+    "messages": 5
+  },
+  "configuration": {
+    "key": "aggregate_id"
+  },
+  "baseline": {},
+  "failure_injection": {},
+  "metrics": {
+    "distinct_partitions": 1,
+    "partitions": [
+      5
+    ]
+  },
+  "conclusions": "\u041e\u0434\u0438\u043d \u043a\u043b\u044e\u0447 \u2192 \u043e\u0434\u043d\u0430 partition.",
+  "limitations": "\u0422\u043e\u043b\u044c\u043a\u043e Kafka."
+}

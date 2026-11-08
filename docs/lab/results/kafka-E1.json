@@ -1,0 +1,23 @@
+{
+  "experiment_id": "E1",
+  "transport": "kafka",
+  "goal": "\u041b\u0430\u0442\u0435\u043d\u0442\u043d\u043e\u0441\u0442\u044c \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 outbox \u2192 broker",
+  "initial_conditions": {
+    "pending_rows": 10
+  },
+  "configuration": {
+    "confirm": "rabbit confirms / kafka acks=all"
+  },
+  "baseline": {
+    "published_batch_sec": 0.029878542001824826
+  },
+  "failure_injection": {},
+  "metrics": {
+    "publish_batch_latency_sec": 0.029878542001824826,
+    "published_count": 10,
+    "errors": 0,
+    "p50_sec": 0.029878542001824826
+  },
+  "conclusions": "\u0418\u0437\u043c\u0435\u0440\u0435\u043d wall-clock \u043e\u0434\u043d\u043e\u0433\u043e tick() \u043d\u0430 n pending rows.",
+  "limitations": "\u041e\u0434\u0438\u043d publisher worker, \u0431\u0435\u0437 \u0441\u0435\u0442\u0435\u0432\u043e\u0439 partition."
+}

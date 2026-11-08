@@ -1,0 +1,25 @@
+{
+  "experiment_id": "E5",
+  "transport": "kafka",
+  "goal": "\u041f\u0430\u0440\u0430\u043b\u043b\u0435\u043b\u044c\u043d\u044b\u0435 publisher workers (claim lease)",
+  "initial_conditions": {
+    "pending": 15,
+    "workers": 3
+  },
+  "configuration": {
+    "owner_lease": "outbox claim"
+  },
+  "baseline": {},
+  "failure_injection": {},
+  "metrics": {
+    "published_total": 16,
+    "elapsed_sec": 0.030718833004357293,
+    "per_worker": [
+      0,
+      0,
+      16
+    ]
+  },
+  "conclusions": "\u041f\u0430\u0440\u0430\u043b\u043b\u0435\u043b\u044c\u043d\u044b\u0435 tick \u0431\u0435\u0437 \u0434\u0432\u043e\u0439\u043d\u043e\u0439 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u043f\u0440\u0438 lease.",
+  "limitations": "\u041e\u0434\u0438\u043d \u043f\u0440\u043e\u0446\u0435\u0441\u0441, shared PG; \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u0439 broker handle \u043d\u0430 parallel worker (E5)."
+}

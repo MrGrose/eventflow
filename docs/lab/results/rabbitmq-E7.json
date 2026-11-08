@@ -1,0 +1,14 @@
+{
+  "experiment_id": "E7",
+  "transport": "rabbitmq",
+  "goal": "Replay / \u043f\u0435\u0440\u0435\u0447\u0438\u0442\u044b\u0432\u0430\u043d\u0438\u0435",
+  "initial_conditions": {},
+  "configuration": {},
+  "baseline": {},
+  "failure_injection": {},
+  "metrics": {
+    "note": "Rabbit: redelivery + DLQ replay manual"
+  },
+  "conclusions": "Rabbit replay \u2014 \u043f\u043e\u0432\u0442\u043e\u0440\u043d\u0430\u044f \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u044f \u0438\u0437 outbox \u0438\u043b\u0438 purge+seed.",
+  "limitations": "\u041d\u0435\u0442 offset log."
+}
