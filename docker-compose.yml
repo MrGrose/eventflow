@@ -1,0 +1,199 @@
+name: eventflow
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: eventflow
+      POSTGRES_PASSWORD: eventflow
+      POSTGRES_DB: eventflow
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventflow -d eventflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  kafka:
+    image: apache/kafka:3.8.0
+    hostname: kafka
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 30s
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn eventflow.api.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      DATABASE_URL: postgresql+asyncpg://eventflow:eventflow@postgres:5432/eventflow
+      MESSAGING_TRANSPORT: rabbitmq
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  outbox-publisher:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m eventflow.workers.outbox_publisher
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventflow:eventflow@postgres:5432/eventflow
+      MESSAGING_TRANSPORT: rabbitmq
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker-rabbitmq:
+    profiles: ["rabbitmq"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m eventflow.workers.rabbitmq_worker --consumer billing
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventflow:eventflow@postgres:5432/eventflow
+      MESSAGING_TRANSPORT: rabbitmq
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker-rabbitmq-inventory:
+    profiles: ["rabbitmq"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m eventflow.workers.rabbitmq_worker --consumer inventory
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventflow:eventflow@postgres:5432/eventflow
+      MESSAGING_TRANSPORT: rabbitmq
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker-kafka:
+    profiles: ["kafka"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m eventflow.workers.kafka_worker --consumer billing
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventflow:eventflow@postgres:5432/eventflow
+      MESSAGING_TRANSPORT: kafka
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  worker-kafka-inventory:
+    profiles: ["kafka"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m eventflow.workers.kafka_worker --consumer inventory
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventflow:eventflow@postgres:5432/eventflow
+      MESSAGING_TRANSPORT: kafka
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:11.3.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  kafka_data:
