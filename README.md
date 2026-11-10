@@ -105,7 +105,7 @@ Typical lifecycle for an order-domain event:
 7. Each handler runs inside **`run_idempotent()`**.
 8. **`processed_events`** records the consumer + event id; duplicates short-circuit before business logic.
 9. Business updates (e.g. payments, stock) commit in PostgreSQL.
-10. **RabbitMQ**: manual **ACK** after successful processing. **Kafka**: **offset commit** only when the handler reports success (no commit on retry/DLT paths that expect redelivery handling).
+10. **RabbitMQ**: manual **ACK** after successful processing. **Kafka**: **offset commit** after the handler succeeds, and after publishing to the retry topic or DLT when the attempt is not retried.
 
 ```mermaid
 sequenceDiagram
@@ -156,8 +156,10 @@ See [docs/operations/dlq-dlt-playbook.md](docs/operations/dlq-dlt-playbook.md) a
 ## Project Structure
 
 ```
+scripts/            # Demo seed and idempotency cleanup helpers
 src/eventflow/
   api/              # FastAPI app, routes, request/response schemas
+  lab/              # Comparative broker experiments (excluded from the wheel)
   application/      # Use cases, order service, consumer dispatch, idempotency
   domain/           # Order aggregate, domain errors
   infrastructure/   # DB, messaging (rabbitmq/kafka), outbox, observability
@@ -289,7 +291,7 @@ uv run pytest -q -m rabbitmq
 uv run pytest -q -m kafka
 ```
 
-CI runs `uv run ruff check .`, `uv run ruff format --check .`, and `uv run pytest -q` with Compose services (see `.github/workflows/ci.yml`).
+CI runs `uv run ruff check .`, `uv run ruff format --check .`, the unit suite, the RabbitMQ and integration suites, and the Kafka suite against a Compose broker (see `.github/workflows/ci.yml`).
 
 ## Observability
 
