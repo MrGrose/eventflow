@@ -1,4 +1,4 @@
-.PHONY: sync lint test unit compose-config compose-up compose-down lab-reset lab-rabbit lab-kafka
+.PHONY: sync lint test unit seed prune compose-config compose-up compose-down lab-reset lab-rabbit lab-kafka
 
 sync:
 	uv sync --all-extras
@@ -15,6 +15,12 @@ unit:
 	uv run pytest -q tests/unit
 
 test: unit
+
+seed:
+	uv run python scripts/seed_stock.py
+
+prune:
+	uv run python scripts/prune_processed_events.py --days 30
 
 compose-config:
 	docker compose config --quiet
