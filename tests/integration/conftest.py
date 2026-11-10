@@ -33,6 +33,7 @@ async def db_engine():
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(text(_TRUNCATE_SQL))
         yield engine
     except OSError as exc:
         pytest.skip(f"database unreachable: {exc}")
@@ -40,13 +41,6 @@ async def db_engine():
         pytest.skip(f"database unavailable: {exc}")
     finally:
         await engine.dispose()
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def _isolate_db(db_engine):
-    async with db_engine.begin() as conn:
-        await conn.execute(text(_TRUNCATE_SQL))
-    yield
 
 
 @pytest_asyncio.fixture
