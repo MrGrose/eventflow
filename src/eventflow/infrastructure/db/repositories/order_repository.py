@@ -29,12 +29,14 @@ class SqlAlchemyOrderRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get(self, order_id: UUID) -> Order | None:
+    async def get(self, order_id: UUID, *, for_update: bool = False) -> Order | None:
         stmt = (
             select(OrderModel)
             .where(OrderModel.id == order_id)
             .options(selectinload(OrderModel.items))
         )
+        if for_update:
+            stmt = stmt.with_for_update()
         result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
         if model is None:

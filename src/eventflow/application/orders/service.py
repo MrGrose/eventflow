@@ -1,6 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from eventflow.application.orders.ports import OrderRepository
@@ -53,7 +54,19 @@ class OrderService:
         order = Order(customer_id=customer_id, items=order_items, idempotency_key=idempotency_key)
         await self._repo.add(order)
         await self._append_outbox(EventType.ORDER_CREATED, order, _order_payload(order))
-        await self._session.commit()
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            await self._session.rollback()
+            if idempotency_key:
+                existing = await self._repo.get_by_idempotency_key(idempotency_key)
+                if existing is not None:
+                    logger.info(
+                        "order_idempotent_replay",
+                        extra={"order_id": str(existing.id), "customer_id": customer_id},
+                    )
+                    return existing
+            raise
         logger.info("order_created", extra={"order_id": str(order.id), "customer_id": customer_id})
         return order
 
@@ -61,7 +74,7 @@ class OrderService:
         return await self._repo.get(order_id)
 
     async def confirm(self, order_id: UUID) -> Order:
-        order = await self._require(order_id)
+        order = await self._require(order_id, for_update=True)
         order.confirm()
         await self._repo.save(order)
         await self._append_outbox(EventType.ORDER_CONFIRMED, order, _order_payload(order))
@@ -70,7 +83,7 @@ class OrderService:
         return order
 
     async def cancel(self, order_id: UUID) -> Order:
-        order = await self._require(order_id)
+        order = await self._require(order_id, for_update=True)
         order.cancel()
         await self._repo.save(order)
         await self._append_outbox(
@@ -93,8 +106,8 @@ class OrderService:
             )
         )
 
-    async def _require(self, order_id: UUID) -> Order:
-        order = await self._repo.get(order_id)
+    async def _require(self, order_id: UUID, *, for_update: bool = False) -> Order:
+        order = await self._repo.get(order_id, for_update=for_update)
         if order is None:
             raise LookupError("order not found")
         return order
