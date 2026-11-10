@@ -17,6 +17,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  migrate:
+    profiles: ["app", "rabbitmq", "kafka"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventflow:eventflow@postgres:5432/eventflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     ports:
@@ -63,6 +75,7 @@ services:
 
   api:
     profiles: ["app"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -79,6 +92,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -93,6 +108,7 @@ services:
 
   outbox-publisher:
     profiles: ["app"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -105,9 +121,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker-rabbitmq:
     profiles: ["rabbitmq"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -121,9 +142,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker-rabbitmq-inventory:
     profiles: ["rabbitmq"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -137,9 +161,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker-kafka:
     profiles: ["kafka"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -153,9 +180,12 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker-kafka-inventory:
     profiles: ["kafka"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -169,6 +199,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   prometheus:
     profiles: ["observability"]
