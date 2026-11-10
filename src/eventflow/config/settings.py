@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     rabbitmq_prefetch: int = Field(default=10, ge=1)
     rabbitmq_publish_confirm_timeout: float = Field(default=30.0, gt=0)
     rabbitmq_retry_ttl_ms: int = Field(default=5000, ge=1000)
+    rabbitmq_max_retries: int = Field(default=3, ge=1)
     kafka_bootstrap_servers: str = "localhost:29092"
     kafka_topic_events: str = "eventflow.events"
     kafka_topic_retry: str = "eventflow.events.retry"

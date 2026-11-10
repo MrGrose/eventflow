@@ -5,12 +5,13 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 
+import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
 
 from eventflow.config import MessagingTransport, Settings, get_settings
 from eventflow.domain.reliability.errors import PermanentProcessingError, RetryableProcessingError
 from eventflow.infrastructure.messaging.rabbitmq.session import RabbitMQSession
-from eventflow.infrastructure.messaging.rabbitmq.topology import queue_main
+from eventflow.infrastructure.messaging.rabbitmq.topology import queue_main, queue_retry
 from eventflow.infrastructure.observability.metrics import DLQ_TOTAL
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,27 @@ class RabbitConsumerWorker:
 
     def request_stop(self) -> None:
         self._stop.set()
+
+    @staticmethod
+    def _retry_attempt(message: AbstractIncomingMessage) -> int:
+        raw = (message.headers or {}).get("x-retry", 0)
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return 0
+
+    async def _publish_retry(self, channel, message: AbstractIncomingMessage, attempt: int) -> None:
+        headers = dict(message.headers or {})
+        headers["x-retry"] = attempt
+        await channel.default_exchange.publish(
+            aio_pika.Message(
+                body=message.body,
+                content_type=message.content_type,
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                headers=headers,
+            ),
+            routing_key=queue_retry(self._name),
+        )
 
     async def run(self, *, max_messages: int | None = None) -> None:
         await self._session.connect()
@@ -90,8 +112,25 @@ class RabbitConsumerWorker:
                         ConnectionError,
                         OSError,
                     ) as exc:
-                        logger.warning("rabbit_retry consumer=%s err=%s", self._name, exc)
-                        await message.nack(requeue=True)
+                        attempt = self._retry_attempt(message) + 1
+                        if attempt <= self._settings.rabbitmq_max_retries:
+                            logger.warning(
+                                "rabbit_retry consumer=%s attempt=%s err=%s",
+                                self._name,
+                                attempt,
+                                exc,
+                            )
+                            await self._publish_retry(channel, message, attempt)
+                            await message.ack()
+                        else:
+                            logger.error(
+                                "rabbit_retry_exhausted consumer=%s attempts=%s err=%s",
+                                self._name,
+                                attempt,
+                                exc,
+                            )
+                            await message.nack(requeue=False)
+                            _inc_dlq(self._name)
                     except PermanentProcessingError as exc:
                         logger.error("rabbit_poison consumer=%s err=%s", self._name, exc)
                         await message.nack(requeue=False)
