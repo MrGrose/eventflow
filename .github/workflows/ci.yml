@@ -91,7 +91,6 @@ jobs:
         run: uv --version
 
       - run: uv sync --all-extras
-      - run: docker compose up -d kafka
-      - run: sleep 25
+      - run: docker compose up -d --wait kafka
       - run: uv run alembic upgrade head
       - run: uv run pytest -q tests/kafka -m kafka

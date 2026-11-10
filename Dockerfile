@@ -15,4 +15,8 @@ RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 CMD ["uvicorn", "eventflow.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
