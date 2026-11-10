@@ -211,6 +211,52 @@ async def test_kafka_retry_exhausted_moves_to_dlt(kafka_session) -> None:
 
 @pytest.mark.kafka
 @pytest.mark.asyncio
+async def test_unexpected_error_is_retried_before_dlt(kafka_session) -> None:
+    base = get_settings()
+    settings = Settings(
+        **{
+            **base.model_dump(),
+            "messaging_transport": MessagingTransport.KAFKA,
+            "kafka_max_retries": 2,
+            "kafka_retry_backoff_ms": 20,
+        }
+    )
+    publisher = KafkaPublisher(kafka_session, settings)
+    event_id = str(uuid.uuid4())
+    await publisher.publish(
+        PublishRequest(
+            event_id=event_id,
+            event_type="order.confirmed",
+            aggregate_type="order",
+            aggregate_id=str(uuid.uuid4()),
+            payload={"unexpected_case": "recover"},
+            target_transport="kafka",
+        )
+    )
+    attempts = 0
+
+    async def buggy_handler(body: dict, _key: bytes) -> None:
+        nonlocal attempts
+        if body.get("event_id") != event_id:
+            return
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("database connection dropped")
+
+    worker = KafkaConsumerWorker("billing", buggy_handler, settings, session=kafka_session)
+    deadline = time.monotonic() + 25
+    while time.monotonic() < deadline and attempts < 2:
+        await worker.run(max_messages=1)
+        worker._stop.clear()
+    assert attempts == 2
+    retry_msg = await _find_in_topic(settings, settings.kafka_topic_retry, event_id, timeout=10.0)
+    assert retry_msg is not None
+    headers_dict = {k: v.decode() for k, v in retry_msg.headers or []}
+    assert headers_dict.get("retry") == "1"
+
+
+@pytest.mark.kafka
+@pytest.mark.asyncio
 async def test_kafka_consumer_groups_billing_and_inventory_independent(
     kafka_session, db_session_factory
 ) -> None:

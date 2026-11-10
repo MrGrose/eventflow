@@ -175,12 +175,35 @@ class KafkaConsumerWorker:
                     await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
                     inc_kafka_consumer(self._name, "dlt")
                     _inc_dlt(self._name)
-                except Exception:
-                    logger.exception("kafka_handler_failed name=%s", self._name)
-                    await self._send_dlt(msg, reason="unhandled")
+                except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                    logger.error("kafka_invalid_payload name=%s err=%s", self._name, exc)
+                    await self._send_dlt(msg, reason="invalid_payload")
                     await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
                     inc_kafka_consumer(self._name, "dlt")
                     _inc_dlt(self._name)
+                except Exception as exc:
+                    next_attempt = attempts_so_far + 1
+                    if next_attempt <= self._settings.kafka_max_retries:
+                        logger.warning(
+                            "kafka_retry_unexpected name=%s attempt=%s err=%s",
+                            self._name,
+                            next_attempt,
+                            exc,
+                        )
+                        await self._send_retry(msg, attempt=next_attempt)
+                        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
+                        inc_kafka_consumer(self._name, "retry")
+                    else:
+                        logger.error(
+                            "kafka_retry_unexpected_exhausted name=%s attempts=%s err=%s",
+                            self._name,
+                            next_attempt,
+                            exc,
+                        )
+                        await self._send_dlt(msg, reason="retry_exhausted")
+                        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
+                        inc_kafka_consumer(self._name, "dlt")
+                        _inc_dlt(self._name)
                 finally:
                     self._in_flight -= 1
                 processed += 1
