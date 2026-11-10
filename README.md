@@ -23,7 +23,7 @@ The system is designed around explicit delivery semantics: at-least-once messagi
 - RabbitMQ transport (`aio-pika`) or Kafka transport (`aiokafka`), selected by `MESSAGING_TRANSPORT`
 - Active consumers: **billing** and **inventory** only
 - Idempotent consumer pipeline (`run_idempotent()`, `processed_events`)
-- RabbitMQ: manual ACK, retry queues, DLQ
+- RabbitMQ: manual ACK, retry queue with TTL and bounded attempts, DLQ
 - Kafka: retry topic, DLT, manual offset commit after successful processing
 - Docker Compose for local infrastructure (and optional app/observability profiles)
 - Alembic schema migrations
@@ -147,7 +147,7 @@ This is **not** true exactly-once delivery end-to-end.
 | Concern | RabbitMQ | Kafka |
 |---------|----------|-------|
 | Success | Manual **ACK** | **Commit offset** after success |
-| Transient failure | **Nack** → retry queue (TTL), then DLQ | Publish to **retry topic**, bounded retries |
+| Transient failure | Publish to **retry queue** with `x-retry`, then DLQ after `RABBITMQ_MAX_RETRIES` | Publish to **retry topic**, bounded retries |
 | Permanent failure | **DLQ** (dead-letter exchange) | **DLT** (dead-letter topic) |
 | Duplicate delivery | Same idempotency key → no duplicate business effect | Same |
 
@@ -200,6 +200,7 @@ Redis is not used in this project.
    ```bash
    uv sync --all-extras
    uv run alembic upgrade head
+   uv run python scripts/seed_stock.py
    ```
 
 5. **Run the API:**
@@ -245,7 +246,7 @@ Redis is not used in this project.
    uv run python -m eventflow.workers.kafka_worker --consumer inventory
    ```
 
-Optional: run the full stack in containers with Compose profiles (`app`, `rabbitmq` or `kafka`, `observability`)—see `docker-compose.yml`.
+Optional: run the full stack in containers with Compose profiles (`app`, `rabbitmq` or `kafka`, `observability`)—see `docker-compose.yml`. The `migrate` service applies Alembic migrations before the API and workers start.
 
 ## Configuration
 
@@ -257,6 +258,7 @@ Optional: run the full stack in containers with Compose profiles (`app`, `rabbit
 | `RABBITMQ_EXCHANGE_EVENTS` | Main events exchange | `eventflow.events` |
 | `RABBITMQ_EXCHANGE_DLX` | Dead-letter exchange | `eventflow.dlx` |
 | `RABBITMQ_RETRY_TTL_MS` | Retry queue delay | `5000` |
+| `RABBITMQ_MAX_RETRIES` | Retry attempts before DLQ | `3` |
 | `KAFKA_BOOTSTRAP_SERVERS` | Broker list | `localhost:29092` (host port mapping) |
 | `KAFKA_TOPIC_EVENTS` | Primary topic | `eventflow.events` |
 | `KAFKA_TOPIC_RETRY` | Retry topic | `eventflow.events.retry` |
@@ -339,3 +341,7 @@ EventFlow is a **complete software system** with explicit semantics, but it is *
 - Operations: [docs/operations/](docs/operations/)
 - Broker comparison: [docs/architecture/messaging-comparison.md](docs/architecture/messaging-comparison.md)
 - Idempotency: [docs/architecture/idempotency-transactions.md](docs/architecture/idempotency-transactions.md)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
